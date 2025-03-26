@@ -1,4 +1,4 @@
-name: Build EXE for Windows
+name: Build EXE for WindowsV2
 
 on:
   push:
@@ -25,10 +25,10 @@ jobs:
 
       - name: Crear el ejecutable con PyInstaller
         run: |
-          pyinstaller --onefile --windowed app.py
+          pyinstaller --onefile --windowed "procesar_nomina.py"
 
       - name: Subir artefacto (.exe)
         uses: actions/upload-artifact@v4
         with:
           name: App-Windows
-          path: dist/app.exe
+          path: dist/procesar_nomina.exe
