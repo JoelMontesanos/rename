@@ -1,4 +1,4 @@
-name: Build EXE for WindowsV2
+name: Build EXE for Windows
 
 on:
   push:
@@ -21,14 +21,14 @@ jobs:
       - name: Instalar dependencias
         run: |
           python -m pip install --upgrade pip
-          pip install pyinstaller pdfplumber
+          pip install pyinstaller pdfplumber tk
 
       - name: Crear el ejecutable con PyInstaller
         run: |
-          pyinstaller --onefile --windowed "procesar_nomina.py"
+          pyinstaller --onefile --windowed --name Procesar_Nomina "Procesar Nomina.py"
 
       - name: Subir artefacto (.exe)
         uses: actions/upload-artifact@v4
         with:
           name: App-Windows
-          path: dist/procesar_nomina.exe
+          path: dist/Procesar_Nomina.exe

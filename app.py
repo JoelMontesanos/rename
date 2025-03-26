@@ -12,6 +12,12 @@ if fecha_actual >= fecha_limite:
     messagebox.showerror("Error", "Esta aplicación ha expirado y ya no puede usarse.")
     exit()
 
+# Diccionario de meses en español a inglés
+meses_es_en = {
+    "Ene": "Jan", "Feb": "Feb", "Mar": "Mar", "Abr": "Apr", "May": "May", "Jun": "Jun",
+    "Jul": "Jul", "Ago": "Aug", "Sep": "Sep", "Oct": "Oct", "Nov": "Nov", "Dic": "Dec"
+}
+
 # Función para seleccionar archivos
 def seleccionar_archivos():
     global archivos_seleccionados
@@ -33,7 +39,7 @@ def solicitar_fecha():
         else:
             messagebox.showerror("Error", "Debe ingresar una fecha de depósito válida.")
 
-# Función para determinar si es finiquito o pago normal
+# Función para determinar si es finiquito o pago normal en XML
 def es_finiquito(root, namespaces):
     percepciones = root.findall(".//nomina12:Percepcion", namespaces)
     conceptos_finiquito = {"019", "022", "024"}  # Vacaciones, Prima de Vacaciones, Aguinaldo
@@ -50,6 +56,7 @@ def procesar_archivos():
     
     # Pedir fecha de depósito al usuario con validación
     fecha_deposito = solicitar_fecha()
+    fecha_deposito_formateada = datetime.strptime(fecha_deposito, "%Y-%m-%d").strftime("%Y-%m-%d")
     
     for archivo in archivos_seleccionados:
         try:
@@ -79,6 +86,7 @@ def procesar_archivos():
                     
                 curp_index = text.find("CURP:")
                 periodo_index = text.find("Periodo:")
+                finiquito_keywords = ["Vacaciones", "Prima de vacaciones", "Aguinaldo"]
                 
                 if curp_index == -1 or periodo_index == -1:
                     messagebox.showerror("Error", f"No se encontraron los datos requeridos en {os.path.basename(archivo)}.")
@@ -88,17 +96,23 @@ def procesar_archivos():
                 fechas = text[periodo_index:].split("-")
                 fecha_inicio = fechas[0].split()[-1].strip()
                 fecha_fin = fechas[1].split()[0].strip()
-                
+
+                # Convertir meses en español a inglés
+                for es, en in meses_es_en.items():
+                    fecha_inicio = fecha_inicio.replace(es, en)
+                    fecha_fin = fecha_fin.replace(es, en)
+
+                # Convertir a formato datetime
                 fecha_inicio = datetime.strptime(fecha_inicio, "%d/%b/%Y").strftime("%d")
                 fecha_fin = datetime.strptime(fecha_fin, "%d/%b/%Y").strftime("%d%b").lower()
                 
-                tipo_documento = "47. Recibos de Nómina"  # PDFs de finiquito requieren detección manual
+                tipo_documento = "14. Finiquito" if any(kw in text for kw in finiquito_keywords) else "47. Recibos de Nómina"
                 
             else:
                 messagebox.showerror("Error", f"Formato de archivo no soportado: {archivo}")
                 continue
             
-            nuevo_nombre = f"{curp}-{tipo_documento}-{fecha_inicio}al{fecha_fin}-{fecha_deposito}{extension}"
+            nuevo_nombre = f"{curp}-{tipo_documento}-{fecha_inicio}al{fecha_fin}-{fecha_deposito_formateada}{extension}"
             nueva_ruta = os.path.join(os.path.dirname(archivo), nuevo_nombre)
             os.rename(archivo, nueva_ruta)
             archivos_procesados.append(nueva_ruta)
