@@ -1,4 +1,4 @@
-name: Build EXE for WindowsV2
+name: Build EXE for Windows
 
 on:
   push:
@@ -21,7 +21,7 @@ jobs:
       - name: Instalar dependencias
         run: |
           python -m pip install --upgrade pip
-          pip install pyinstaller pdfplumber tkinter
+          pip install pyinstaller pdfplumber
 
       - name: Crear el ejecutable con PyInstaller
         run: |
@@ -32,8 +32,3 @@ jobs:
         with:
           name: App-Windows
           path: dist/app.exe
-
-        uses: actions/upload-artifact@v4
-        with:
-          name: App-Windows
-          path: dist/Procesar_Xml_Tkinter.exe
