@@ -25,7 +25,7 @@ jobs:
 
       - name: Crear el ejecutable con PyInstaller
         run: |
-          pyinstaller --onefile --windowed "Procesar Xml Tkinter.py"
+          pyinstaller --onefile --windowed "Procesar_Xml_Tkinter.py"
 
       - name: Subir artefacto (.exe)
         uses: actions/upload-artifact@v4
