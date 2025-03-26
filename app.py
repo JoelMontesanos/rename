@@ -5,6 +5,13 @@ import xml.etree.ElementTree as ET
 from datetime import datetime
 import pdfplumber
 
+# Verificar la fecha actual
+fecha_limite = datetime(2025, 3, 28)
+fecha_actual = datetime.now()
+if fecha_actual >= fecha_limite:
+    messagebox.showerror("Error", "Esta aplicación ha expirado y ya no puede usarse.")
+    exit()
+
 # Función para seleccionar archivos
 def seleccionar_archivos():
     global archivos_seleccionados
