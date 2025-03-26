@@ -33,6 +33,15 @@ def solicitar_fecha():
         else:
             messagebox.showerror("Error", "Debe ingresar una fecha de depósito válida.")
 
+# Función para determinar si es finiquito o pago normal
+def es_finiquito(root, namespaces):
+    percepciones = root.findall(".//nomina12:Percepcion", namespaces)
+    conceptos_finiquito = {"019", "022", "024"}  # Vacaciones, Prima de Vacaciones, Aguinaldo
+    for percepcion in percepciones:
+        if percepcion.get("Clave") in conceptos_finiquito:
+            return True
+    return False
+
 # Función para procesar archivos XML y PDF
 def procesar_archivos():
     global archivos_procesados
@@ -55,17 +64,14 @@ def procesar_archivos():
                 fecha_fin_elem = root.find(".//nomina12:Nomina[@FechaFinalPago]", namespaces)
                 
                 if curp_elem is None or fecha_inicio_elem is None or fecha_fin_elem is None:
-                    messagebox.showerror("Error", f"El archivo {os.path.basename(archivo)} no tiene los datos requeridos (Curp, FechaInicialPago o FechaFinalPago).")
+                    messagebox.showerror("Error", f"El archivo {os.path.basename(archivo)} no tiene los datos requeridos.")
                     continue
                 
                 curp = curp_elem.get("Curp").strip()
-                fecha_inicio = fecha_inicio_elem.get("FechaInicialPago").strip()
-                fecha_fin = fecha_fin_elem.get("FechaFinalPago").strip()
+                fecha_inicio = datetime.strptime(fecha_inicio_elem.get("FechaInicialPago"), "%Y-%m-%d").strftime("%d")
+                fecha_fin = datetime.strptime(fecha_fin_elem.get("FechaFinalPago"), "%Y-%m-%d").strftime("%d%b").lower()
                 
-                fecha_inicio_obj = datetime.strptime(fecha_inicio, "%Y-%m-%d")
-                fecha_fin_obj = datetime.strptime(fecha_fin, "%Y-%m-%d")
-                fecha_inicio = fecha_inicio_obj.strftime("%d")
-                fecha_fin = fecha_fin_obj.strftime("%d%b").lower()
+                tipo_documento = "14. Finiquito" if es_finiquito(root, namespaces) else "47. Recibos de Nómina"
                 
             elif extension == ".pdf":
                 with pdfplumber.open(archivo) as pdf:
@@ -83,16 +89,16 @@ def procesar_archivos():
                 fecha_inicio = fechas[0].split()[-1].strip()
                 fecha_fin = fechas[1].split()[0].strip()
                 
-                fecha_inicio_obj = datetime.strptime(fecha_inicio, "%d/%b/%Y")
-                fecha_fin_obj = datetime.strptime(fecha_fin, "%d/%b/%Y")
-                fecha_inicio = fecha_inicio_obj.strftime("%d")
-                fecha_fin = fecha_fin_obj.strftime("%d%b").lower()
+                fecha_inicio = datetime.strptime(fecha_inicio, "%d/%b/%Y").strftime("%d")
+                fecha_fin = datetime.strptime(fecha_fin, "%d/%b/%Y").strftime("%d%b").lower()
+                
+                tipo_documento = "47. Recibos de Nómina"  # PDFs de finiquito requieren detección manual
                 
             else:
                 messagebox.showerror("Error", f"Formato de archivo no soportado: {archivo}")
                 continue
             
-            nuevo_nombre = f"{curp}-47. Recibos de Nómina-{fecha_inicio}al{fecha_fin}-{fecha_deposito}{extension}"
+            nuevo_nombre = f"{curp}-{tipo_documento}-{fecha_inicio}al{fecha_fin}-{fecha_deposito}{extension}"
             nueva_ruta = os.path.join(os.path.dirname(archivo), nuevo_nombre)
             os.rename(archivo, nueva_ruta)
             archivos_procesados.append(nueva_ruta)
