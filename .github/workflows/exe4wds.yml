@@ -31,4 +31,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: App-Windows
-          path: dist/Procesar\ Xml\ Tkinter.exe
+          path: dist/Procesar_Xml_Tkinter.exe
