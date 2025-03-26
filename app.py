@@ -8,8 +8,7 @@ import pdfplumber
 # Función para seleccionar archivos
 def seleccionar_archivos():
     global archivos_seleccionados
-    archivos_seleccionados = filedialog.askopenfilenames(filetypes=[("Archivos XML y PDF", "*.xml *.pdf"), ("Archivos XML", "*.xml"), ("Archivos PDF", "*.pdf")]
-)
+    archivos_seleccionados = filedialog.askopenfilenames(filetypes=[("Archivos XML y PDF", "*.xml *.pdf"), ("Archivos XML", "*.xml"), ("Archivos PDF", "*.pdf")])
     if archivos_seleccionados:
         label_archivos.config(text=f"{len(archivos_seleccionados)} archivos seleccionados")
         boton_procesar.config(state=tk.NORMAL)
@@ -39,6 +38,7 @@ def procesar_archivos():
     for archivo in archivos_seleccionados:
         try:
             extension = os.path.splitext(archivo)[1].lower()
+            
             if extension == ".xml":
                 tree = ET.parse(archivo)
                 root = tree.getroot()
@@ -54,6 +54,11 @@ def procesar_archivos():
                 curp = curp_elem.get("Curp").strip()
                 fecha_inicio = fecha_inicio_elem.get("FechaInicialPago").strip()
                 fecha_fin = fecha_fin_elem.get("FechaFinalPago").strip()
+                
+                fecha_inicio_obj = datetime.strptime(fecha_inicio, "%Y-%m-%d")
+                fecha_fin_obj = datetime.strptime(fecha_fin, "%Y-%m-%d")
+                fecha_inicio = fecha_inicio_obj.strftime("%d")
+                fecha_fin = fecha_fin_obj.strftime("%d%b").lower()
                 
             elif extension == ".pdf":
                 with pdfplumber.open(archivo) as pdf:
