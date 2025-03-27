@@ -29,7 +29,7 @@ jobs:
 
       - name: Crear el ejecutable con PyInstaller (incluye ícono)
         run: |
-          pyinstaller --onefile --windowed --name Procesar_Nomina --icon=op.ico app.py
+          pyinstaller --onefile --windowed --name Procesar_Nomina --icon=op.icns app.py
 
       - name: Subir artefacto (.exe)
         uses: actions/upload-artifact@v4

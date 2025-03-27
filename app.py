@@ -5,13 +5,6 @@ import xml.etree.ElementTree as ET
 from datetime import datetime
 import pdfplumber
 
-# Verificar la fecha actual
-fecha_limite = datetime(2025, 3, 28)
-fecha_actual = datetime.now()
-if fecha_actual >= fecha_limite:
-    messagebox.showerror("Error", "Esta aplicación ha expirado y ya no puede usarse.")
-    exit()
-
 # Diccionario de meses en español a número
 meses_es_num = {
     "Ene": "01", "Feb": "02", "Mar": "03", "Abr": "04", "May": "05", "Jun": "06",
@@ -44,7 +37,7 @@ def solicitar_fecha():
                 messagebox.showerror("Error", "Formato de fecha incorrecto. Debe ser YYYY-MM-DD.")
         else:
             messagebox.showerror("Error", "Debe ingresar una fecha de depósito válida.")
-            
+
 # Función para determinar si es finiquito o pago normal en XML
 def es_finiquito(root, namespaces):
     percepciones = root.findall(".//nomina12:Percepcion", namespaces)
