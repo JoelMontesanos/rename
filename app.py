@@ -12,10 +12,16 @@ if fecha_actual >= fecha_limite:
     messagebox.showerror("Error", "Esta aplicación ha expirado y ya no puede usarse.")
     exit()
 
-# Diccionario de meses en español a inglés
-meses_es_en = {
-    "Ene": "Jan", "Feb": "Feb", "Mar": "Mar", "Abr": "Apr", "May": "May", "Jun": "Jun",
-    "Jul": "Jul", "Ago": "Aug", "Sep": "Sep", "Oct": "Oct", "Nov": "Nov", "Dic": "Dec"
+# Diccionario de meses en español a número
+meses_es_num = {
+    "Ene": "01", "Feb": "02", "Mar": "03", "Abr": "04", "May": "05", "Jun": "06",
+    "Jul": "07", "Ago": "08", "Sep": "09", "Oct": "10", "Nov": "11", "Dic": "12"
+}
+
+# Diccionario de meses en español en formato corto
+meses_cortos = {
+    "01": "Ene", "02": "Feb", "03": "Mar", "04": "Abr", "05": "May", "06": "Jun",
+    "07": "Jul", "08": "Ago", "09": "Sep", "10": "Oct", "11": "Nov", "12": "Dic"
 }
 
 # Función para seleccionar archivos
@@ -38,11 +44,11 @@ def solicitar_fecha():
                 messagebox.showerror("Error", "Formato de fecha incorrecto. Debe ser YYYY-MM-DD.")
         else:
             messagebox.showerror("Error", "Debe ingresar una fecha de depósito válida.")
-
+            
 # Función para determinar si es finiquito o pago normal en XML
 def es_finiquito(root, namespaces):
     percepciones = root.findall(".//nomina12:Percepcion", namespaces)
-    conceptos_finiquito = {"019", "022"}  # Solo Vacaciones y Prima de Vacaciones #, "024" Aguinaldo
+    conceptos_finiquito = {"019", "022"}
     for percepcion in percepciones:
         if percepcion.get("Clave") in conceptos_finiquito:
             return True
@@ -76,7 +82,8 @@ def procesar_archivos():
                 
                 curp = curp_elem.get("Curp").strip()
                 fecha_inicio = datetime.strptime(fecha_inicio_elem.get("FechaInicialPago"), "%Y-%m-%d").strftime("%d")
-                fecha_fin = datetime.strptime(fecha_fin_elem.get("FechaFinalPago"), "%Y-%m-%d").strftime("%d%b").lower()
+                fecha_fin_dt = datetime.strptime(fecha_fin_elem.get("FechaFinalPago"), "%Y-%m-%d")
+                fecha_fin = f"{fecha_fin_dt.strftime('%d')}{meses_cortos[fecha_fin_dt.strftime('%m')]}".lower()
                 
                 tipo_documento = "14. Finiquito" if es_finiquito(root, namespaces) else "47. Recibos de Nómina"
                 
@@ -96,15 +103,17 @@ def procesar_archivos():
                 fechas = text[periodo_index:].split("-")
                 fecha_inicio = fechas[0].split()[-1].strip()
                 fecha_fin = fechas[1].split()[0].strip()
-
-                # Convertir meses en español a inglés
-                for es, en in meses_es_en.items():
-                    fecha_inicio = fecha_inicio.replace(es, en)
-                    fecha_fin = fecha_fin.replace(es, en)
-
-                # Convertir a formato datetime
-                fecha_inicio = datetime.strptime(fecha_inicio, "%d/%b/%Y").strftime("%d")
-                fecha_fin = datetime.strptime(fecha_fin, "%d/%b/%Y").strftime("%d%b").lower()
+                
+                # Convertir meses en español a número y luego formatear
+                for mes, num in meses_es_num.items():
+                    fecha_inicio = fecha_inicio.replace(mes, num)
+                    fecha_fin = fecha_fin.replace(mes, num)
+                
+                fecha_inicio_dt = datetime.strptime(fecha_inicio, "%d/%m/%Y")
+                fecha_fin_dt = datetime.strptime(fecha_fin, "%d/%m/%Y")
+                
+                fecha_inicio = fecha_inicio_dt.strftime("%d")
+                fecha_fin = f"{fecha_fin_dt.strftime('%d')}{meses_cortos[fecha_fin_dt.strftime('%m')]}".lower()
                 
                 tipo_documento = "14. Finiquito" if any(kw in text for kw in finiquito_keywords) else "47. Recibos de Nómina"
                 
@@ -123,10 +132,12 @@ def procesar_archivos():
     if archivos_procesados:
         messagebox.showinfo("Éxito", "Archivos procesados correctamente")
 
+
 # Configuración de la ventana principal
 root = tk.Tk()
-root.title("Procesador de XML y PDF")
+root.title("Óptima Procesador de nombre")
 root.geometry("400x300")
+root.iconbitmap("op.ico")
 
 # Botón para seleccionar archivos
 boton_seleccionar = tk.Button(root, text="Seleccionar Archivos", command=seleccionar_archivos)
