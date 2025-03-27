@@ -42,7 +42,7 @@ def solicitar_fecha():
 # Función para determinar si es finiquito o pago normal en XML
 def es_finiquito(root, namespaces):
     percepciones = root.findall(".//nomina12:Percepcion", namespaces)
-    conceptos_finiquito = {"019", "022", "024"}  # Vacaciones, Prima de Vacaciones, Aguinaldo
+    conceptos_finiquito = {"019", "022"}  # Solo Vacaciones y Prima de Vacaciones #, "024" Aguinaldo
     for percepcion in percepciones:
         if percepcion.get("Clave") in conceptos_finiquito:
             return True
@@ -86,7 +86,7 @@ def procesar_archivos():
                     
                 curp_index = text.find("CURP:")
                 periodo_index = text.find("Periodo:")
-                finiquito_keywords = ["Vacaciones", "Prima de vacaciones", "Aguinaldo"]
+                finiquito_keywords = ["Vacaciones", "Prima de vacaciones"]
                 
                 if curp_index == -1 or periodo_index == -1:
                     messagebox.showerror("Error", f"No se encontraron los datos requeridos en {os.path.basename(archivo)}.")
