@@ -130,7 +130,6 @@ def procesar_archivos():
 root = tk.Tk()
 root.title("Óptima Procesador de nombre")
 root.geometry("400x300")
-root.iconbitmap("op.ico")
 
 # Botón para seleccionar archivos
 boton_seleccionar = tk.Button(root, text="Seleccionar Archivos", command=seleccionar_archivos)
