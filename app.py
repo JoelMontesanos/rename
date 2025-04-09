@@ -25,7 +25,7 @@ def seleccionar_archivos():
         label_archivos.config(text=f"{len(archivos_seleccionados)} archivos seleccionados")
         boton_procesar.config(state=tk.NORMAL)
 
-# Función para validar la fecha ingresada por el usuario
+# Función para pedir fecha
 def solicitar_fecha():
     while True:
         fecha_deposito = simpledialog.askstring("Fecha de Depósito", "Ingrese la fecha de depósito (YYYY-MM-DD):")
@@ -38,25 +38,61 @@ def solicitar_fecha():
         else:
             messagebox.showerror("Error", "Debe ingresar una fecha de depósito válida.")
 
-# Función para determinar si es finiquito o pago normal en XML
+# Función para XML
 def es_finiquito(root, namespaces):
     percepciones = root.findall(".//nomina12:Percepcion", namespaces)
-    conceptos_finiquito = {"019", "022"}
-    for percepcion in percepciones:
-        if percepcion.get("Clave") in conceptos_finiquito:
-            return True
-    return False
+    fecha_inicio_elem = root.find(".//nomina12:Nomina[@FechaInicialPago]", namespaces)
+    fecha_fin_elem = root.find(".//nomina12:Nomina[@FechaFinalPago]", namespaces)
 
-# Función para procesar archivos XML y PDF
+    claves_finiquito = {"019", "022", "024"}
+    contiene_claves_finiquito = any(p.get("Clave") in claves_finiquito for p in percepciones)
+    incluye_sueldo = any(p.get("Clave") == "001" and float(p.get("ImporteGravado", "0")) > 0 for p in percepciones)
+
+    periodo_es_un_dia = False
+    if fecha_inicio_elem is not None and fecha_fin_elem is not None:
+        fecha_ini = fecha_inicio_elem.get("FechaInicialPago")
+        fecha_fin = fecha_fin_elem.get("FechaFinalPago")
+        if fecha_ini == fecha_fin:
+            periodo_es_un_dia = True
+
+    total_gravado = sum(float(p.get("ImporteGravado", "0")) for p in percepciones)
+    total_exento = sum(float(p.get("ImporteExento", "0")) for p in percepciones)
+    mas_exento_que_gravado = total_exento > total_gravado
+
+    condiciones = [
+        contiene_claves_finiquito,
+        not incluye_sueldo,
+        periodo_es_un_dia,
+        mas_exento_que_gravado
+    ]
+    return sum(condiciones) >= 2
+
+# Función para PDF
+def es_finiquito_pdf(texto):
+    condiciones = 0
+    claves_finiquito = ["Vacaciones", "Prima de vacaciones", "Aguinaldo"]
+    if any(palabra in texto for palabra in claves_finiquito):
+        condiciones += 1
+    if "Periodo:" in texto:
+        partes = texto.split("Periodo:")[1].strip().split()
+        if len(partes) >= 3 and partes[0] == partes[2]:
+            condiciones += 1
+    if "Sueldo" not in texto:
+        condiciones += 1
+    return condiciones >= 2
+
+# Procesamiento de archivos
 def procesar_archivos():
     global archivos_procesados
     archivos_procesados = []
     namespaces = {'cfdi': 'http://www.sat.gob.mx/cfd/4', 'nomina12': 'http://www.sat.gob.mx/nomina12'}
     
-    # Pedir fecha de depósito al usuario con validación
     fecha_deposito = solicitar_fecha()
     fecha_deposito_formateada = datetime.strptime(fecha_deposito, "%Y-%m-%d").strftime("%Y-%m-%d")
-    
+
+    total_finiquitos = 0
+    total_recibos = 0
+
     for archivo in archivos_seleccionados:
         try:
             extension = os.path.splitext(archivo)[1].lower()
@@ -78,16 +114,17 @@ def procesar_archivos():
                 fecha_fin_dt = datetime.strptime(fecha_fin_elem.get("FechaFinalPago"), "%Y-%m-%d")
                 fecha_fin = f"{fecha_fin_dt.strftime('%d')}{meses_cortos[fecha_fin_dt.strftime('%m')]}".lower()
                 
-                tipo_documento = "14. Finiquito" if es_finiquito(root, namespaces) else "47. Recibos de Nómina"
-                
+                es_fini = es_finiquito(root, namespaces)
+                tipo_documento = "14. Finiquito" if es_fini else "47. Recibos de Nómina"
+                total_finiquitos += 1 if es_fini else 0
+                total_recibos += 0 if es_fini else 1
+
             elif extension == ".pdf":
                 with pdfplumber.open(archivo) as pdf:
                     text = " ".join(page.extract_text() for page in pdf.pages if page.extract_text())
                     
                 curp_index = text.find("CURP:")
                 periodo_index = text.find("Periodo:")
-                finiquito_keywords = ["Vacaciones", "Prima de vacaciones"]
-                
                 if curp_index == -1 or periodo_index == -1:
                     messagebox.showerror("Error", f"No se encontraron los datos requeridos en {os.path.basename(archivo)}.")
                     continue
@@ -96,52 +133,52 @@ def procesar_archivos():
                 fechas = text[periodo_index:].split("-")
                 fecha_inicio = fechas[0].split()[-1].strip()
                 fecha_fin = fechas[1].split()[0].strip()
-                
-                # Convertir meses en español a número y luego formatear
                 for mes, num in meses_es_num.items():
                     fecha_inicio = fecha_inicio.replace(mes, num)
                     fecha_fin = fecha_fin.replace(mes, num)
                 
                 fecha_inicio_dt = datetime.strptime(fecha_inicio, "%d/%m/%Y")
                 fecha_fin_dt = datetime.strptime(fecha_fin, "%d/%m/%Y")
-                
                 fecha_inicio = fecha_inicio_dt.strftime("%d")
                 fecha_fin = f"{fecha_fin_dt.strftime('%d')}{meses_cortos[fecha_fin_dt.strftime('%m')]}".lower()
                 
-                tipo_documento = "14. Finiquito" if any(kw in text for kw in finiquito_keywords) else "47. Recibos de Nómina"
-                
+                es_fini = es_finiquito_pdf(text)
+                tipo_documento = "14. Finiquito" if es_fini else "47. Recibos de Nómina"
+                total_finiquitos += 1 if es_fini else 0
+                total_recibos += 0 if es_fini else 1
+
             else:
                 messagebox.showerror("Error", f"Formato de archivo no soportado: {archivo}")
                 continue
-            
+
             nuevo_nombre = f"{curp}-{tipo_documento}-{fecha_inicio}al{fecha_fin}-{fecha_deposito_formateada}{extension}"
             nueva_ruta = os.path.join(os.path.dirname(archivo), nuevo_nombre)
             os.rename(archivo, nueva_ruta)
             archivos_procesados.append(nueva_ruta)
-        
+
         except Exception as e:
             messagebox.showerror("Error", f"No se pudo procesar {os.path.basename(archivo)}\n{str(e)}")
-    
+
     if archivos_procesados:
-        messagebox.showinfo("Éxito", "Archivos procesados correctamente")
+        resumen = (
+            f"✅ Archivos procesados correctamente:\n\n"
+            f"🔸 Finiquitos: {total_finiquitos}\n"
+            f"🔸 Recibos normales: {total_recibos}"
+        )
+        messagebox.showinfo("Resumen de procesamiento", resumen)
 
-
-# Configuración de la ventana principal
+# GUI
 root = tk.Tk()
 root.title("Óptima Procesador de nombre")
 root.geometry("400x300")
 
-# Botón para seleccionar archivos
 boton_seleccionar = tk.Button(root, text="Seleccionar Archivos", command=seleccionar_archivos)
 boton_seleccionar.pack(pady=10)
 
-# Etiqueta para mostrar la cantidad de archivos seleccionados
 label_archivos = tk.Label(root, text="No hay archivos seleccionados")
 label_archivos.pack()
 
-# Botón para procesar archivos
 boton_procesar = tk.Button(root, text="Procesar Archivos", command=procesar_archivos, state=tk.DISABLED)
 boton_procesar.pack(pady=10)
 
-# Ejecutar la aplicación
 root.mainloop()
