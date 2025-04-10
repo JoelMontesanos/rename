@@ -4,28 +4,25 @@ from tkinter import filedialog, messagebox, simpledialog
 import xml.etree.ElementTree as ET
 from datetime import datetime
 import pdfplumber
+import re
 
-# Diccionario de meses en español a número
+# Diccionario de meses
 meses_es_num = {
     "Ene": "01", "Feb": "02", "Mar": "03", "Abr": "04", "May": "05", "Jun": "06",
     "Jul": "07", "Ago": "08", "Sep": "09", "Oct": "10", "Nov": "11", "Dic": "12"
 }
-
-# Diccionario de meses en español en formato corto
 meses_cortos = {
     "01": "Ene", "02": "Feb", "03": "Mar", "04": "Abr", "05": "May", "06": "Jun",
     "07": "Jul", "08": "Ago", "09": "Sep", "10": "Oct", "11": "Nov", "12": "Dic"
 }
 
-# Función para seleccionar archivos
 def seleccionar_archivos():
     global archivos_seleccionados
-    archivos_seleccionados = filedialog.askopenfilenames(filetypes=[("Archivos XML y PDF", "*.xml *.pdf"), ("Archivos XML", "*.xml"), ("Archivos PDF", "*.pdf")])
+    archivos_seleccionados = filedialog.askopenfilenames(filetypes=[("Archivos XML y PDF", "*.xml *.pdf")])
     if archivos_seleccionados:
         label_archivos.config(text=f"{len(archivos_seleccionados)} archivos seleccionados")
         boton_procesar.config(state=tk.NORMAL)
 
-# Función para pedir fecha
 def solicitar_fecha():
     while True:
         fecha_deposito = simpledialog.askstring("Fecha de Depósito", "Ingrese la fecha de depósito (YYYY-MM-DD):")
@@ -36,9 +33,8 @@ def solicitar_fecha():
             except ValueError:
                 messagebox.showerror("Error", "Formato de fecha incorrecto. Debe ser YYYY-MM-DD.")
         else:
-            messagebox.showerror("Error", "Debe ingresar una fecha de depósito válida.")
+            messagebox.showerror("Error", "Debe ingresar una fecha válida.")
 
-# Función para XML
 def es_finiquito(root, namespaces):
     percepciones = root.findall(".//nomina12:Percepcion", namespaces)
     fecha_inicio_elem = root.find(".//nomina12:Nomina[@FechaInicialPago]", namespaces)
@@ -48,12 +44,8 @@ def es_finiquito(root, namespaces):
     contiene_claves_finiquito = any(p.get("Clave") in claves_finiquito for p in percepciones)
     incluye_sueldo = any(p.get("Clave") == "001" and float(p.get("ImporteGravado", "0")) > 0 for p in percepciones)
 
-    periodo_es_un_dia = False
-    if fecha_inicio_elem is not None and fecha_fin_elem is not None:
-        fecha_ini = fecha_inicio_elem.get("FechaInicialPago")
-        fecha_fin = fecha_fin_elem.get("FechaFinalPago")
-        if fecha_ini == fecha_fin:
-            periodo_es_un_dia = True
+    periodo_es_un_dia = fecha_inicio_elem is not None and fecha_fin_elem is not None and \
+        fecha_inicio_elem.get("FechaInicialPago") == fecha_fin_elem.get("FechaFinalPago")
 
     total_gravado = sum(float(p.get("ImporteGravado", "0")) for p in percepciones)
     total_exento = sum(float(p.get("ImporteExento", "0")) for p in percepciones)
@@ -67,26 +59,50 @@ def es_finiquito(root, namespaces):
     ]
     return sum(condiciones) >= 2
 
-# Función para PDF
 def es_finiquito_pdf(texto):
     condiciones = 0
     claves_finiquito = ["Vacaciones", "Prima de vacaciones", "Aguinaldo"]
-    if any(palabra in texto for palabra in claves_finiquito):
+    if any(p in texto for p in claves_finiquito):
         condiciones += 1
-    if "Periodo:" in texto:
-        partes = texto.split("Periodo:")[1].strip().split()
-        if len(partes) >= 3 and partes[0] == partes[2]:
-            condiciones += 1
+
+    match_periodo = re.search(r"Periodo:\s*(\d{1,2}/\w{3}/\d{4})\s+(\d{1,2}/\w{3}/\d{4})", texto, re.IGNORECASE)
+    if match_periodo:
+        fecha_ini = match_periodo.group(1)
+        fecha_fin = match_periodo.group(2)
+        condiciones += 1 if fecha_ini == fecha_fin else 0
+
     if "Sueldo" not in texto:
         condiciones += 1
+
     return condiciones >= 2
 
-# Procesamiento de archivos
+def extraer_fechas_y_curp_pdf(texto):
+    match_curp = re.search(r"CURP:\s*([A-Z0-9]{18})", texto)
+    curp = match_curp.group(1) if match_curp else "CURP_DESCONOCIDO"
+
+    match_periodo = re.search(r"Periodo:\s*(\d{1,2}/\w{3}/\d{4})\s+(\d{1,2}/\w{3}/\d{4})", texto, re.IGNORECASE)
+    if not match_periodo:
+        raise ValueError("No se encontraron las fechas del periodo.")
+
+    fecha_inicio = match_periodo.group(1)
+    fecha_fin = match_periodo.group(2)
+
+    for mes, num in meses_es_num.items():
+        fecha_inicio = fecha_inicio.replace(mes, num)
+        fecha_fin = fecha_fin.replace(mes, num)
+
+    fecha_inicio_dt = datetime.strptime(fecha_inicio, "%d/%m/%Y")
+    fecha_fin_dt = datetime.strptime(fecha_fin, "%d/%m/%Y")
+
+    fecha_inicio_dia = fecha_inicio_dt.strftime("%d")
+    fecha_fin_formateada = f"{fecha_fin_dt.strftime('%d')}{meses_cortos[fecha_fin_dt.strftime('%m')]}".lower()
+
+    return curp, fecha_inicio_dia, fecha_fin_formateada
+
 def procesar_archivos():
     global archivos_procesados
     archivos_procesados = []
     namespaces = {'cfdi': 'http://www.sat.gob.mx/cfd/4', 'nomina12': 'http://www.sat.gob.mx/nomina12'}
-    
     fecha_deposito = solicitar_fecha()
     fecha_deposito_formateada = datetime.strptime(fecha_deposito, "%Y-%m-%d").strftime("%Y-%m-%d")
 
@@ -96,60 +112,42 @@ def procesar_archivos():
     for archivo in archivos_seleccionados:
         try:
             extension = os.path.splitext(archivo)[1].lower()
-            
+
             if extension == ".xml":
                 tree = ET.parse(archivo)
                 root = tree.getroot()
-                
                 curp_elem = root.find(".//nomina12:Receptor[@Curp]", namespaces)
                 fecha_inicio_elem = root.find(".//nomina12:Nomina[@FechaInicialPago]", namespaces)
                 fecha_fin_elem = root.find(".//nomina12:Nomina[@FechaFinalPago]", namespaces)
-                
+
                 if curp_elem is None or fecha_inicio_elem is None or fecha_fin_elem is None:
-                    messagebox.showerror("Error", f"El archivo {os.path.basename(archivo)} no tiene los datos requeridos.")
+                    messagebox.showerror("Error", f"Faltan datos en el archivo XML: {os.path.basename(archivo)}")
                     continue
-                
+
                 curp = curp_elem.get("Curp").strip()
                 fecha_inicio = datetime.strptime(fecha_inicio_elem.get("FechaInicialPago"), "%Y-%m-%d").strftime("%d")
                 fecha_fin_dt = datetime.strptime(fecha_fin_elem.get("FechaFinalPago"), "%Y-%m-%d")
                 fecha_fin = f"{fecha_fin_dt.strftime('%d')}{meses_cortos[fecha_fin_dt.strftime('%m')]}".lower()
-                
+
                 es_fini = es_finiquito(root, namespaces)
                 tipo_documento = "14. Finiquito" if es_fini else "47. Recibos de Nómina"
-                total_finiquitos += 1 if es_fini else 0
-                total_recibos += 0 if es_fini else 1
 
             elif extension == ".pdf":
                 with pdfplumber.open(archivo) as pdf:
                     text = " ".join(page.extract_text() for page in pdf.pages if page.extract_text())
-                    
-                curp_index = text.find("CURP:")
-                periodo_index = text.find("Periodo:")
-                if curp_index == -1 or periodo_index == -1:
-                    messagebox.showerror("Error", f"No se encontraron los datos requeridos en {os.path.basename(archivo)}.")
-                    continue
-                
-                curp = text[curp_index + 5:].split()[0].strip()
-                fechas = text[periodo_index:].split("-")
-                fecha_inicio = fechas[0].split()[-1].strip()
-                fecha_fin = fechas[1].split()[0].strip()
-                for mes, num in meses_es_num.items():
-                    fecha_inicio = fecha_inicio.replace(mes, num)
-                    fecha_fin = fecha_fin.replace(mes, num)
-                
-                fecha_inicio_dt = datetime.strptime(fecha_inicio, "%d/%m/%Y")
-                fecha_fin_dt = datetime.strptime(fecha_fin, "%d/%m/%Y")
-                fecha_inicio = fecha_inicio_dt.strftime("%d")
-                fecha_fin = f"{fecha_fin_dt.strftime('%d')}{meses_cortos[fecha_fin_dt.strftime('%m')]}".lower()
-                
+
+                curp, fecha_inicio, fecha_fin = extraer_fechas_y_curp_pdf(text)
                 es_fini = es_finiquito_pdf(text)
                 tipo_documento = "14. Finiquito" if es_fini else "47. Recibos de Nómina"
-                total_finiquitos += 1 if es_fini else 0
-                total_recibos += 0 if es_fini else 1
 
             else:
-                messagebox.showerror("Error", f"Formato de archivo no soportado: {archivo}")
+                messagebox.showerror("Error", f"Tipo de archivo no soportado: {archivo}")
                 continue
+
+            if es_fini:
+                total_finiquitos += 1
+            else:
+                total_recibos += 1
 
             nuevo_nombre = f"{curp}-{tipo_documento}-{fecha_inicio}al{fecha_fin}-{fecha_deposito_formateada}{extension}"
             nueva_ruta = os.path.join(os.path.dirname(archivo), nuevo_nombre)
@@ -167,7 +165,7 @@ def procesar_archivos():
         )
         messagebox.showinfo("Resumen de procesamiento", resumen)
 
-# GUI
+# Interfaz gráfica
 root = tk.Tk()
 root.title("Óptima Procesador de nombre")
 root.geometry("400x300")
