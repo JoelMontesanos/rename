@@ -69,12 +69,22 @@ def es_finiquito(root, namespaces):
     return sum(condiciones) >= 2
 
 # Función para PDF
+# Función para PDF corregida
 def es_finiquito_pdf(texto):
     condiciones = 0
     claves_finiquito = ["Vacaciones", "Prima de vacaciones", "Aguinaldo"]
 
+    # Extraer bloque de percepciones si existe
+    percepciones_bloque = ""
+    if "Percepciones" in texto and "Deducciones" in texto:
+        percepciones_bloque = texto.split("Percepciones")[1].split("Deducciones")[0]
+
+    # Si contiene sueldo, NO es finiquito
+    if "Sueldo" in percepciones_bloque:
+        return False
+
     # Condición 1: Contiene conceptos típicos de finiquito
-    if any(palabra in texto for palabra in claves_finiquito):
+    if any(palabra in percepciones_bloque for palabra in claves_finiquito):
         condiciones += 1
 
     # Condición 2: ¿Periodo con misma fecha de inicio y fin?
@@ -83,11 +93,6 @@ def es_finiquito_pdf(texto):
         fecha_inicio, fecha_fin = match_periodo.groups()
         if fecha_inicio == fecha_fin:
             condiciones += 1
-
-    # Condición 3: No hay concepto de sueldo como percepción
-    percepciones_bloque = texto.split("Percepciones")[1].split("Deducciones")[0] if "Percepciones" in texto and "Deducciones" in texto else ""
-    if "Sueldo" not in percepciones_bloque:
-        condiciones += 1
 
     return condiciones >= 2
 
